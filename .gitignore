@@ -209,3 +209,4 @@ datasets/*.jpg
 *.json
 *.pt
 output/
+prediction_output
