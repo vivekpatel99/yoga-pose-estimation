@@ -1,6 +1,7 @@
 # Yoga Pose Estimation with YOLO
 
-![demo image](assets/assets/demo.gif)
+![demo image](assets/demo.gif)
+
 This project focuses on training and evaluating a YOLO (You Only Look Once) model for yoga pose estimation. It utilizes the Ultralytics framework to streamline the training and validation process.
 
 ## Table of Contents
