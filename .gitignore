@@ -210,3 +210,4 @@ datasets/*.jpg
 *.pt
 output/
 prediction_output
+linter-results/

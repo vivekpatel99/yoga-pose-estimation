@@ -1,0 +1,167 @@
+name: Super-Linter Only (Python CI/CD Tools)
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      languages:
+        description: "Comma-separated list of languages to lint"
+        required: false
+        default: "python,yaml,json,markdown"
+      enable_auto_fix:
+        description: "Enable auto-fixing (use with caution)"
+        type: boolean
+        default: true
+      target_dir:
+        description: "Target directory to lint (relative to repo root)"
+        required: false
+        default: "."
+
+permissions:
+  contents: read
+  packages: read
+  statuses: write
+  issues: write # Required for the workflow to comment on pull requests
+
+jobs:
+  super-linter:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: latest
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Load cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}
+
+      - name: Install dependencies
+        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+        run: poetry install --no-interaction --no-root
+
+      - name: Clone CI/CD Tools
+        run: |
+          git clone https://github.com/Maris-Stella-Labs/cicd-tools.git cicd-tools
+          cd cicd-tools
+          # IMPORTANT: For security, checkout a specific commit SHA or tag instead of a branch.
+          # This prevents malicious code from being run if the branch is updated.
+          # Example: git checkout f03b035c14a9d5f8b943c62b66f6a8673da30b16
+          git checkout 6ac16b64c7820e6b43afb3307898aa3265fa7c80
+          poetry install --no-interaction
+
+      - name: Run Super-Linter
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd cicd-tools
+          FIX_FLAG="--no-auto-fix"
+          if [[ "${{ github.event.inputs.enable_auto_fix }}" == "true" ]]; then
+            FIX_FLAG="--enable-auto-fix"
+          fi
+          python -m scripts_app.scripts.super_linter_runner \
+            --languages "${{ github.event.inputs.languages || 'python,javascript,typescript,yaml,json,markdown' }}" \
+            --output-dir ../super-linter-output \
+            --target-dir ../${{ github.event.inputs.target_dir || '.' }} \
+            --save-results ../super-linter-results.json \
+            $FIX_FLAG
+
+      - name: Upload Super-Linter Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: super-linter-results
+          path: |
+            super-linter-output/
+            super-linter-results.json
+          retention-days: 30
+
+      - name: Check Results and Fail if Issues Found
+        if: always()
+        run: |
+          if [ -f "super-linter-results.json" ]; then
+            # Extract success status from results
+            SUCCESS=$(python -c "
+            import json
+            try:
+                with open('super-linter-results.json', 'r') as f:
+                    data = json.load(f)
+                print(data.get('success', False))
+            except:
+                print('False')
+            ")
+            
+            if [ "$SUCCESS" != "True" ]; then
+              echo "❌ Super-Linter found issues that need to be fixed"
+              echo "Check the uploaded artifacts for detailed results"
+              exit 1
+            else
+              echo "✅ Super-Linter passed successfully"
+            fi
+          else
+            echo "❌ No results file found"
+            exit 1
+          fi
+
+      - name: Comment PR with Results
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            try {
+              // Read results if available
+              let results = {};
+              if (fs.existsSync('super-linter-results.json')) {
+                results = JSON.parse(fs.readFileSync('super-linter-results.json', 'utf8'));
+              }
+              
+              const status = results.success ? '✅ **PASSED**' : '❌ **FAILED**';
+              const issuesCount = results.issues_found || 0;
+              const filesLinted = results.files_linted || 0;
+              const languagesChecked = results.languages_checked || 'N/A';
+              
+              const comment = `## 🔍 Super-Linter Results
+              
+              **Status**: ${status}
+              **Languages Checked**: ${languagesChecked}
+              **Files Linted**: ${filesLinted}
+              **Issues Found**: ${issuesCount}
+              
+              ${results.success ? 
+                '🎉 All linting checks passed! Your code follows the project\'s style guidelines.' :
+                '⚠️ Please fix the linting issues found. Check the workflow artifacts for detailed information.'
+              }
+              
+              ---
+              *Generated by Python CI/CD Tools*`;
+              
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            } catch (error) {
+              console.log('Could not post comment:', error.message);
+            }
