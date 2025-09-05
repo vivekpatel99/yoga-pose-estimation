@@ -59,14 +59,16 @@ jobs:
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
         run: poetry install --no-interaction --no-root
 
-      - name: Clone CI/CD Tools
+      - name: Clone CI/CD Tools Repository
+        uses: actions/checkout@v4
+        with:
+          repository: Maris-Stella-Labs/cicd-tools
+          path: cicd-tools
+          ref: 6ac16b64c7820e6b43afb3307898aa3265fa7c80 # Pin to a specific commit for security
+
+      - name: Install CI/CD Tools Dependencies
         run: |
-          git clone https://github.com/Maris-Stella-Labs/cicd-tools.git cicd-tools
           cd cicd-tools
-          # IMPORTANT: For security, checkout a specific commit SHA or tag instead of a branch.
-          # This prevents malicious code from being run if the branch is updated.
-          # Example: git checkout f03b035c14a9d5f8b943c62b66f6a8673da30b16
-          git checkout 6ac16b64c7820e6b43afb3307898aa3265fa7c80
           poetry install --no-interaction
 
       - name: Run Super-Linter
