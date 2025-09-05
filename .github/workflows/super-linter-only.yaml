@@ -81,11 +81,6 @@ jobs:
             --save-results ../super-linter-results.json \
             ${{ github.event.inputs.enable_auto_fix == 'true' && '--enable-auto-fix' || '--no-auto-fix' }}
 
-          # Move results file to root directory for artifact upload
-          if [ -f "../super-linter-results.json" ]; then
-            mv ../super-linter-results.json ./super-linter-results.json
-          fi
-
       - name: Upload Super-Linter Results
         if: always()
         uses: actions/upload-artifact@v4
@@ -93,18 +88,19 @@ jobs:
           name: super-linter-results
           path: |
             super-linter-output/
-            cicd-tools/super-linter-results.json
+            super-linter-results.json
           retention-days: 30
+          if-no-files-found: warn
 
       - name: Check Results and Fail if Issues Found
         if: always()
         run: |
-          if [ -f "cicd-tools/super-linter-results.json" ]; then
+          if [ -f "super-linter-results.json" ]; then
             # Extract success status from results
             SUCCESS=$(python -c "
             import json
             try:
-                with open('cicd-tools/super-linter-results.json', 'r') as f:
+                with open('super-linter-results.json', 'r') as f:
                     data = json.load(f)
                 print(data.get('success', False))
             except:
@@ -133,8 +129,8 @@ jobs:
             try {
               // Read results if available
               let results = {};
-              if (fs.existsSync('cicd-tools/super-linter-results.json')) {
-                results = JSON.parse(fs.readFileSync('cicd-tools/super-linter-results.json', 'utf8'));
+              if (fs.existsSync('super-linter-results.json')) {
+                results = JSON.parse(fs.readFileSync('super-linter-results.json', 'utf8'));
               }
               
               const status = results.success ? '✅ **PASSED**' : '❌ **FAILED**';
