@@ -74,16 +74,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd cicd-tools
-          FIX_FLAG="--no-auto-fix"
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.enable_auto_fix }}" == "true" ]]; then
-            FIX_FLAG="--enable-auto-fix"
-          fi
           python -m scripts_app.scripts.super_linter_runner \
             --languages "${{ github.event.inputs.languages || 'python,javascript,typescript,yaml,json,markdown' }}" \
             --output-dir ../super-linter-output \
             --target-dir ../${{ github.event.inputs.target_dir || '.' }} \
             --save-results ../super-linter-results.json \
-            $FIX_FLAG
+            ${{ github.event.inputs.enable_auto_fix == 'true' && '--enable-auto-fix' || '--no-auto-fix' }}
 
           # Move results file to root directory for artifact upload
           if [ -f "../super-linter-results.json" ]; then
@@ -103,12 +99,12 @@ jobs:
       - name: Check Results and Fail if Issues Found
         if: always()
         run: |
-          if [ -f "super-linter-results.json" ]; then
+          if [ -f "cicd-tools/super-linter-results.json" ]; then
             # Extract success status from results
             SUCCESS=$(python -c "
             import json
             try:
-                with open('super-linter-results.json', 'r') as f:
+                with open('cicd-tools/super-linter-results.json', 'r') as f:
                     data = json.load(f)
                 print(data.get('success', False))
             except:
@@ -137,8 +133,8 @@ jobs:
             try {
               // Read results if available
               let results = {};
-              if (fs.existsSync('super-linter-results.json')) {
-                results = JSON.parse(fs.readFileSync('super-linter-results.json', 'utf8'));
+              if (fs.existsSync('cicd-tools/super-linter-results.json')) {
+                results = JSON.parse(fs.readFileSync('cicd-tools/super-linter-results.json', 'utf8'));
               }
               
               const status = results.success ? '✅ **PASSED**' : '❌ **FAILED**';
