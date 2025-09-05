@@ -75,7 +75,7 @@ jobs:
         run: |
           cd cicd-tools
           FIX_FLAG="--no-auto-fix"
-          if [[ "${{ github.event.inputs.enable_auto_fix }}" == "true" ]]; then
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.enable_auto_fix }}" == "true" ]]; then
             FIX_FLAG="--enable-auto-fix"
           fi
           python -m scripts_app.scripts.super_linter_runner \
@@ -85,6 +85,11 @@ jobs:
             --save-results ../super-linter-results.json \
             $FIX_FLAG
 
+          # Move results file to root directory for artifact upload
+          if [ -f "../super-linter-results.json" ]; then
+            mv ../super-linter-results.json ./super-linter-results.json
+          fi
+
       - name: Upload Super-Linter Results
         if: always()
         uses: actions/upload-artifact@v4
@@ -92,7 +97,7 @@ jobs:
           name: super-linter-results
           path: |
             super-linter-output/
-            super-linter-results.json
+            cicd-tools/super-linter-results.json
           retention-days: 30
 
       - name: Check Results and Fail if Issues Found
